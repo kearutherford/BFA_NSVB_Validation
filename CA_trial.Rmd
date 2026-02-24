@@ -1,0 +1,26 @@
+
+```{r}
+library(tidyverse)
+library(BerkeleyForestsAnalytics)
+```
+
+```{r}
+ca_tree <- read_csv("CA_TREE.csv") 
+```
+
+```{r}
+ca_tree_filter <- ca_tree %>%
+  filter(INVYR == 2021,
+         STATUSCD == 1 | STATUSCD == 2) %>%
+  select(CN, PLT_CN, STATECD, PLOT, STATUSCD, DECAYCD, SPCD, DIA, HT, ACTUALHT, CR, CULL,
+         DRYBIO_STEM, DRYBIO_STEM_BARK, DRYBIO_BRANCH, DRYBIO_FOLIAGE, 
+         DRYBIO_STUMP, DRYBIO_STUMP_BARK,
+         DRYBIO_BOLE, DRYBIO_BOLE_BARK)
+
+head(ca_tree_filter)
+
+ca_tree_filter %>% filter(is.na(DRYBIO_STEM))
+```
+
+
+
