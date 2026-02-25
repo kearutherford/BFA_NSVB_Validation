@@ -6,20 +6,59 @@ library(BerkeleyForestsAnalytics)
 
 ```{r}
 ca_tree <- read_csv("CA_TREE.csv") 
+ca_cond <- read_csv("CA_COND.csv") 
+ca_plotsnap <- read_csv("CA_PLOTSNAP.csv") 
 ```
+
+tree_with_stdorg <- tree %>%
+  left_join(
+    cond %>%
+      select(STATECD, UNITCD, COUNTYCD, PLOT, INVYR, CONDID, STDORGCD),
+    by = c("STATECD",
+           "UNITCD",
+           "COUNTYCD",
+           "PLOT",
+           "INVYR",
+           "CONDID")
+  )
+
 
 ```{r}
 ca_tree_filter <- ca_tree %>%
   filter(INVYR == 2021,
          STATUSCD == 1 | STATUSCD == 2) %>%
-  select(CN, PLT_CN, STATECD, PLOT, STATUSCD, DECAYCD, SPCD, DIA, HT, ACTUALHT, CR, CULL,
-         DRYBIO_STEM, DRYBIO_STEM_BARK, DRYBIO_BRANCH, DRYBIO_FOLIAGE, 
-         DRYBIO_STUMP, DRYBIO_STUMP_BARK,
-         DRYBIO_BOLE, DRYBIO_BOLE_BARK)
+  mutate(site = as.character(STATECD),
+         plot = as.character(PLOT),
+         exp_factor = 50,
+         status = as.character(STATUSCD),
+         decay_class = as.character(DECAYCD),
+         species = as.character(SPCD),
+         dbh = DIA,
+         ht1 = HT,
+         ht2 = ACTUALHT,
+         crown_ratio = CR,
+         top = if_else(HT > ACTUALHT, "N", "Y"),
+         cull = CULL,
+         CN = as.character(CN),
+         PLT_CN = as.character(PLT_CN),
+         total_wood_fia = DRYBIO_STEM*0.45359,
+         total_bark_fia = DRYBIO_STEM_BARK*0.45359,
+         total_branch_fia = DRYBIO_BRANCH*0.45359,
+         merch_wood_fia = DRYBIO_BOLE*0.45359,
+         merch_bark_fia = DRYBIO_BOLE_BARK*0.45359,
+         stump_wood_fia = DRYBIO_STUMP*0.45359,
+         stump_bark_fia = DRYBIO_STUMP_BARK*0.45359,
+         foliage_fia = DRYBIO_FOLIAGE*0.45359) %>%
+  select(CN, PLT_CN,
+         site, plot, exp_factor, status, decay_class, species, 
+         dbh, ht1, ht2, crown_ratio, top, cull,
+         total_wood_fia, total_bark_fia, total_branch_fia,
+         merch_wood_fia, merch_bark_fia,
+         stump_wood_fia, stump_bark_fia, foliage_fia) %>%
+  drop_na(status, species, dbh, ht1, ht2, crown_ratio, total_wood_fia, total_bark_fia, total_branch_fia, foliage_fia) %>%
+  filter(!(status == "2" & is.na(decay_class)))
 
 head(ca_tree_filter)
-
-ca_tree_filter %>% filter(is.na(DRYBIO_STEM))
 ```
 
 
