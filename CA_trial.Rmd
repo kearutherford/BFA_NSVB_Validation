@@ -2,6 +2,7 @@
 ```{r}
 library(tidyverse)
 library(BerkeleyForestsAnalytics)
+library(stringr)
 ```
 
 ```{r}
@@ -10,24 +11,52 @@ ca_cond <- read_csv("CA_COND.csv")
 ca_plotsnap <- read_csv("CA_PLOTSNAP.csv") 
 ```
 
-tree_with_stdorg <- tree %>%
-  left_join(
-    cond %>%
-      select(STATECD, UNITCD, COUNTYCD, PLOT, INVYR, CONDID, STDORGCD),
-    by = c("STATECD",
-           "UNITCD",
-           "COUNTYCD",
-           "PLOT",
-           "INVYR",
-           "CONDID")
-  )
+```{r}
+ca_cond_filter <- ca_cond %>%
+  filter(INVYR == 2021) %>%
+  mutate(STATECD = as.character(STATECD),
+         UNITCD = as.character(UNITCD),
+         COUNTYCD = as.character(COUNTYCD),
+         PLOT = as.character(PLOT),
+         INVYR = as.character(INVYR),
+         CONDID = as.character(CONDID),
+         stand_org = as.character(STDORGCD)) %>%
+  select(STATECD, UNITCD, COUNTYCD, PLOT, INVYR, CONDID, stand_org)
 
+head(ca_cond_filter)
+```
+
+```{r}
+ca_plot_filter <- ca_plotsnap %>%
+  mutate(STATECD = as.character(STATECD),
+         UNITCD = as.character(UNITCD),
+         COUNTYCD = as.character(COUNTYCD),
+         PLOT = as.character(PLOT),
+         INVYR = as.integer(INVYR)) %>%
+  group_by(STATECD, UNITCD, COUNTYCD, PLOT) %>%
+  slice_max(INVYR, with_ties = FALSE) %>%
+  ungroup() %>%
+  mutate(province = str_extract(ECOSUBCD, "^[A-Za-z]?\\d{3}"),
+         letter = str_extract(province, "^[A-Za-z]"),
+         number = as.numeric(str_extract(province, "\\d{3}")),
+         rounded_number = floor(number/10)*10,
+         division = paste0(coalesce(letter, ""), rounded_number)) %>%
+  select(STATECD, UNITCD, COUNTYCD, PLOT, division, province)
+
+head(ca_plot_filter)
+```
 
 ```{r}
 ca_tree_filter <- ca_tree %>%
   filter(INVYR == 2021,
          STATUSCD == 1 | STATUSCD == 2) %>%
-  mutate(site = as.character(STATECD),
+  mutate(STATECD = as.character(STATECD),
+         UNITCD = as.character(UNITCD),
+         COUNTYCD = as.character(COUNTYCD),
+         PLOT = as.character(PLOT),
+         INVYR = as.character(INVYR),
+         CONDID = as.character(CONDID),
+         site = as.character(STATECD),
          plot = as.character(PLOT),
          exp_factor = 50,
          status = as.character(STATUSCD),
@@ -36,12 +65,10 @@ ca_tree_filter <- ca_tree %>%
          dbh = DIA,
          ht1 = HT,
          ht2 = ACTUALHT,
-         crown_ratio = CR,
+         crown_ratio = CR/100,
          top = if_else(HT > ACTUALHT, "N", "Y"),
          cull = CULL,
-         CN = as.character(CN),
-         PLT_CN = as.character(PLT_CN),
-         total_wood_fia = DRYBIO_STEM*0.45359,
+         total_wood_fia = DRYBIO_STEM*0.45359, # for tons use 0.0005
          total_bark_fia = DRYBIO_STEM_BARK*0.45359,
          total_branch_fia = DRYBIO_BRANCH*0.45359,
          merch_wood_fia = DRYBIO_BOLE*0.45359,
@@ -49,7 +76,7 @@ ca_tree_filter <- ca_tree %>%
          stump_wood_fia = DRYBIO_STUMP*0.45359,
          stump_bark_fia = DRYBIO_STUMP_BARK*0.45359,
          foliage_fia = DRYBIO_FOLIAGE*0.45359) %>%
-  select(CN, PLT_CN,
+  select(STATECD, UNITCD, COUNTYCD, PLOT, INVYR, CONDID,
          site, plot, exp_factor, status, decay_class, species, 
          dbh, ht1, ht2, crown_ratio, top, cull,
          total_wood_fia, total_bark_fia, total_branch_fia,
@@ -59,7 +86,73 @@ ca_tree_filter <- ca_tree %>%
   filter(!(status == "2" & is.na(decay_class)))
 
 head(ca_tree_filter)
+dim(ca_tree_filter)
 ```
+
+```{r}
+ca_bfa_data <- left_join(ca_tree_filter, ca_cond_filter, by = c("STATECD","UNITCD","COUNTYCD","PLOT","INVYR","CONDID")) %>%
+  mutate(stand_org = if_else(is.na(stand_org),"0","1")) %>%
+  left_join(ca_plot_filter, by = c("STATECD","UNITCD","COUNTYCD","PLOT")) %>%
+  select(-c(STATECD, UNITCD, COUNTYCD, PLOT, INVYR, CONDID)) %>%
+  select(division, province, site, plot, stand_org, everything())
+
+head(ca_bfa_data)
+dim(ca_bfa_data)
+```
+
+```{r}
+ca_check <- BiomassNSVB(data = ca_bfa_data,
+                        results = "by_tree",
+                        input_units = "imperial",
+                        output_units = "metric")
+```
+
+```{r}
+# use 1g difference 
+match_check <- ca_check$dataframe %>%
+  mutate(total_wood_match = as.integer(abs(total_wood_kg - total_wood_fia) < 1e-3),
+         total_bark_match = as.integer(abs(total_bark_kg - total_bark_fia) < 1e-3),
+         total_branch_match = as.integer(abs(total_branch_kg - total_branch_fia) < 1e-3),
+         merch_wood_match = as.integer(abs(merch_wood_kg - merch_wood_fia) < 1e-3),
+         merch_bark_match = as.integer(abs(merch_bark_kg - merch_bark_fia) < 1e-3),
+         stump_wood_match = as.integer(abs(stump_wood_kg - stump_wood_fia) < 1e-3),
+         stump_bark_match = as.integer(abs(stump_bark_kg - stump_bark_fia) < 1e-3),
+         foliage_match = as.integer(abs(foliage_kg - foliage_fia) < 1e-3)) %>%
+  select(province, plot, status, decay_class, species, dbh_cm, top,
+         total_wood_kg, total_wood_fia, total_wood_match,
+         total_bark_kg, total_bark_fia, total_bark_match,
+         total_branch_kg, total_branch_fia, total_branch_match,
+         merch_wood_kg, merch_wood_fia, merch_wood_match,
+         merch_bark_kg, merch_bark_fia, merch_bark_match,
+         stump_wood_kg, stump_wood_fia, stump_wood_match,
+         stump_bark_kg, stump_bark_fia, stump_bark_match,
+         foliage_kg, foliage_fia, foliage_match)
+
+head(match_check)
+```
+
+```{r}
+match_check %>%
+  filter(total_wood_match == 0) %>%
+  group_by(plot) %>%
+  summarize(n = n())
+```
+
+```{r}
+match_summary <- match_check %>%
+  summarize(total_wood = (sum(total_wood_match)/n())*100,
+            total_bark = (sum(total_bark_match)/n())*100,
+            total_branch = (sum(total_branch_match)/n())*100,
+            # no merch or stump calculated for trees with dbh < 12.5 cm (5 in) in either BFA or FIA
+            merch_wood = (sum(merch_wood_match, na.rm=TRUE)/sum(!is.na(merch_wood_match)))*100,
+            merch_bark = (sum(merch_bark_match, na.rm=TRUE)/sum(!is.na(merch_bark_match)))*100,
+            stump_wood = (sum(stump_wood_match, na.rm=TRUE)/sum(!is.na(stump_wood_match)))*100,
+            stump_bark = (sum(stump_bark_match, na.rm=TRUE)/sum(!is.na(stump_bark_match)))*100,
+            foliage = (sum(foliage_match)/n())*100)
+
+match_summary
+```
+
 
 
 
