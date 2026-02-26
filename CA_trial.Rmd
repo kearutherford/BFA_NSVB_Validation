@@ -3,6 +3,7 @@
 library(tidyverse)
 library(BerkeleyForestsAnalytics)
 library(stringr)
+options(scipen = 999)
 ```
 
 ```{r}
@@ -110,14 +111,14 @@ ca_check <- BiomassNSVB(data = ca_bfa_data,
 ```{r}
 # use 1g difference 
 match_check <- ca_check$dataframe %>%
-  mutate(total_wood_match = as.integer(abs(total_wood_kg - total_wood_fia) < 1e-3),
-         total_bark_match = as.integer(abs(total_bark_kg - total_bark_fia) < 1e-3),
-         total_branch_match = as.integer(abs(total_branch_kg - total_branch_fia) < 1e-3),
-         merch_wood_match = as.integer(abs(merch_wood_kg - merch_wood_fia) < 1e-3),
-         merch_bark_match = as.integer(abs(merch_bark_kg - merch_bark_fia) < 1e-3),
-         stump_wood_match = as.integer(abs(stump_wood_kg - stump_wood_fia) < 1e-3),
-         stump_bark_match = as.integer(abs(stump_bark_kg - stump_bark_fia) < 1e-3),
-         foliage_match = as.integer(abs(foliage_kg - foliage_fia) < 1e-3)) %>%
+  mutate(total_wood_match = as.integer(near(total_wood_kg, total_wood_fia, tol = 1e-2)),
+         total_bark_match = as.integer(near(total_bark_kg, total_bark_fia, tol = 1e-2)),
+         total_branch_match = as.integer(near(total_branch_kg, total_branch_fia, tol = 1e-2)),
+         merch_wood_match = as.integer(near(merch_wood_kg, merch_wood_fia, tol = 1e-2)),
+         merch_bark_match = as.integer(near(merch_bark_kg, merch_bark_fia, tol = 1e-2)),
+         stump_wood_match = as.integer(near(stump_wood_kg, stump_wood_fia, tol = 1e-2)),
+         stump_bark_match = as.integer(near(stump_bark_kg, stump_bark_fia, tol = 1e-2)),
+         foliage_match = as.integer(near(foliage_kg, foliage_fia, tol = 1e-2))) %>%
   select(province, plot, status, decay_class, species, dbh_cm, top,
          total_wood_kg, total_wood_fia, total_wood_match,
          total_bark_kg, total_bark_fia, total_bark_match,
@@ -132,27 +133,76 @@ head(match_check)
 ```
 
 ```{r}
-match_check %>%
-  filter(total_wood_match == 0) %>%
-  group_by(plot) %>%
-  summarize(n = n())
-```
-
-```{r}
 match_summary <- match_check %>%
-  summarize(total_wood = (sum(total_wood_match)/n())*100,
+  summarize(total_n = n(),
+            merch_stump_n = sum(!is.na(merch_wood_match)),
+            total_wood = (sum(total_wood_match)/n())*100,
             total_bark = (sum(total_bark_match)/n())*100,
             total_branch = (sum(total_branch_match)/n())*100,
+            foliage = (sum(foliage_match)/n())*100,
             # no merch or stump calculated for trees with dbh < 12.5 cm (5 in) in either BFA or FIA
             merch_wood = (sum(merch_wood_match, na.rm=TRUE)/sum(!is.na(merch_wood_match)))*100,
             merch_bark = (sum(merch_bark_match, na.rm=TRUE)/sum(!is.na(merch_bark_match)))*100,
             stump_wood = (sum(stump_wood_match, na.rm=TRUE)/sum(!is.na(stump_wood_match)))*100,
-            stump_bark = (sum(stump_bark_match, na.rm=TRUE)/sum(!is.na(stump_bark_match)))*100,
-            foliage = (sum(foliage_match)/n())*100)
+            stump_bark = (sum(stump_bark_match, na.rm=TRUE)/sum(!is.na(stump_bark_match)))*100)
 
 match_summary
 ```
 
+```{r}
+checks <- function(var_name) {
 
+  plot_df <- match_check %>%
+    filter(.data[[var_name]] == 0) %>%
+    group_by(plot) %>%
+    summarize(n = n())
+  
+  sp_df <- match_check %>%
+    mutate(match = case_when(.data[[var_name]] > 0.5 ~ "no_error_n",
+                             .data[[var_name]]< 0.5 ~ "error_n")) %>%
+    group_by(species, match) %>%
+    count() %>%
+    ungroup() %>%
+    pivot_wider(names_from = match, values_from = n, values_fill = 0) %>%
+    mutate(total_n = error_n + no_error_n,
+           percent_in_pop = (total_n/sum(total_n))*100,
+           percent_w_error = (error_n/total_n)*100) %>%
+    filter(error_n > 0)
+    
+  return(list(plot_df, sp_df))
+  
+}
+```
 
+```{r}
+checks("total_wood_match")
+```
+
+```{r}
+checks("total_bark_match")
+```
+
+```{r}
+checks("total_branch_match")
+```
+
+```{r}
+checks("merch_wood_match")
+```
+
+```{r}
+checks("merch_bark_match")
+```
+
+```{r}
+checks("stump_wood_match")
+```
+
+```{r}
+checks("stump_bark_match")
+```
+
+```{r}
+checks("foliage_match")
+```
 
