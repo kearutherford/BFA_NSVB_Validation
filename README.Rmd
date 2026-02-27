@@ -26,9 +26,9 @@ Specifically, we compare our implementation of the national-scale volume and bio
 ### General workflow
 
 The annual FIA inventory samples approximately 10% of the FIA plots in each state. The 10% of plots are intentionally spread out across the state. 
-We pulled FIA data for all 50 states for inventory year 2021 (2021 was the most recent year where data was available for every state), representing roughly 10% of FIA trees, spread fairly evenly across the country. 
+We pulled FIA data for all 50 states for inventory year 2021 (2021 was the most recent year where data were available for every state), representing roughly 10% of FIA trees, spread fairly evenly across the country. 
 
-FIA internally applies the NSVB framework to estimate biomasses for their trees. We ran the 2021 subset of trees through the `BiomassNSVB()` function in BerkeleyForestsAnalytics. For each tree and biomass variable, we checked that the FIA NSVB estimate and the BFA NSVB estimate were consistent to 10g (0.01kg). For foliage biomass (which has much smaller values in general) we checked for consistency to 1g (0.001kg). Given computer precision and rounding, it is not practical to get an exact estimate match. 
+FIA internally applies the NSVB framework to estimate various biomass components for each tree. We ran the 2021 subset of trees through the `BiomassNSVB()` function in BerkeleyForestsAnalytics. For each tree and biomass component, we verified that the FIA NSVB estimate and the BFA NSVB estimate were consistent to within 10 g (0.01 kg). For foliage biomass, whose values are generally much smaller, we sued a tighter tolerance of 1 g (0.001 kg). Because of computer precision limits and minor rounding differences, obtaining exact numerical agreement is not practical. The specified tolerances reflect an appropriate and operationally meaningful standard of consistency.
 
 
 ### Main results 
@@ -47,9 +47,7 @@ read_csv("results.csv", show_col_types = FALSE) %>%
   kable(format = "markdown", digits = 3)
 ```
 
-FIA fuzzes all plot locations and swaps a small subset of plot locations. Therefore, for a small percent of plots, the publicly available data assigns a different ecodivision and province than the private/internal data. The NSVB framework centers around the assignment of ecodivision. This explains almost all of the small inconsistencies between the FIA and BFA estimates. Because of the fuzzy and swapping 100% agreement is not possible.
-
-We consulted with FIA personnel on the issue of fuzzing and swapping in relation to the ecodivision assignments and NSVB biomass estimates. However, we also sanity checked that the fuzzing and swapping was the primary culprit by making sure that the non-matching trees were clustered in a small set of plots.  
+FIA fuzzes all publicly released plot locations and swaps a small subset of plot locations. As a result, for a small percentage of plots, the publicly available data has a different ecodivision assigned than the internal FIA data. The NSVB framework relies heavily on ecodivision assignment. Thus, the fuzzing and swapping of plot locations makes it impossible to achieve 100% agreement between FIA NSVB estimates (which use the ecodivisions associated with the internal plot locations) and BFA NSVB estimates (which use the ecodivisions associated with the publicly released plot locations). We found that almost all non-matching trees are concentrated within a small subset of plots, supporting that the fuzzing and swapping of plot locations is the primary source of discrepancy, as expected. 
 
 
 ### Description of files in repository
