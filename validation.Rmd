@@ -3,6 +3,7 @@
 library(tidyverse)
 library(BerkeleyForestsAnalytics)
 library(stringr)
+library(FIESTA)
 options(scipen = 999)
 ```
 
@@ -135,8 +136,8 @@ head(match_check)
 
 ```{r}
 match_summary <- match_check %>%
-  summarize(total_n_trees = n(),
-            #merch_stump_n = sum(!is.na(merch_wood_match)),
+  summarize(total_n = n(),
+            merch_stump_n = sum(!is.na(merch_wood_match)),
             total_wood = (sum(total_wood_match)/n())*100,
             total_bark = (sum(total_bark_match)/n())*100,
             total_branch = (sum(total_branch_match)/n())*100,
@@ -148,118 +149,4 @@ match_summary <- match_check %>%
             stump_bark = (sum(stump_bark_match, na.rm=TRUE)/sum(!is.na(stump_bark_match)))*100)
 
 match_summary
-#write_csv(match_summary, "results.csv")
 ```
-
-|FIA name|BFA name|
-|:---|:---|
-|DRYBIO_STEM|total_wood|
-|DRYBIO_STEM_BARK|total_bark|
-|DRYBIO_BRANCH|total_branch|
-|DRYBIO_BOLE|merch_wood|
-|DRYBIO_BOLE_BARK|merch_bark|
-|DRYBIO_STUMP|stump_wood|
-|DRYBIO_STUMP_BARK|stump_bark|
-|DRYBIO_FOLIAGE|foliage|
-
-
-```{r}
-checks <- function(var_name) {
-
-  plot_df <- match_check %>%
-    filter(.data[[var_name]] == 0) %>%
-    group_by(plot) %>%
-    summarize(n = n())
-  
-  sp_df <- match_check %>%
-    mutate(match = case_when(.data[[var_name]] > 0.5 ~ "no_error_n",
-                             .data[[var_name]]< 0.5 ~ "error_n")) %>%
-    group_by(species, match) %>%
-    count() %>%
-    ungroup() %>%
-    pivot_wider(names_from = match, values_from = n, values_fill = 0) %>%
-    mutate(total_n = error_n + no_error_n,
-           percent_in_pop = (total_n/sum(total_n))*100,
-           percent_w_error = (error_n/total_n)*100) %>%
-    filter(error_n > 0)
-    
-  return(list(plot_df, sp_df))
-  
-}
-```
-
-```{r}
-checks("total_wood_match")
-```
-
-```{r}
-checks("total_bark_match")
-```
-
-```{r}
-checks("stump_wood_match")
-```
-
-```{r}
-checks("stump_bark_match")
-```
-
-
-fia value is 0 when ht2 << ht1 (even when CR is not 0)
-
-```{r}
-checks("total_branch_match")
-```
-
-```{r}
-plot_exclude <- c("63305", "69013", "92216", "99974")
-
-match_check %>%
-  filter(total_branch_match == 0,
-         !plot %in% plot_exclude)
-```
-
-```{r}
-checks("foliage_match")
-```
-
-```{r}
-plot_exclude <- c("63305", "69013", "92216", "99974")
-
-match_check %>%
-  filter(foliage_match == 0,
-         !plot %in% plot_exclude)
-```
-
-
-fia estimate > BFA for some trees where ht1 < 4m and dbh is > 12.5cm.
-Is the equation for the height to a 4 in top diameter just not always solving well given the strange dimensions? 
-
-```{r}
-checks("merch_wood_match")
-```
-
-```{r}
-plot_exclude <- c("63305", "69013", "92216", "99974")
-
-match_check %>%
-  filter(merch_wood_match == 0,
-         !plot %in% plot_exclude)
-
-match_check %>%
-  filter(ht1_m < 4, dbh_cm > 12.5,
-         !plot %in% plot_exclude)
-```
-
-```{r}
-checks("merch_bark_match")
-```
-
-```{r}
-plot_exclude <- c("63305", "69013", "92216", "99974")
-
-match_check %>%
-  filter(merch_bark_match == 0,
-         !plot %in% plot_exclude)
-```
-
