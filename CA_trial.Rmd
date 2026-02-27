@@ -7,9 +7,9 @@ options(scipen = 999)
 ```
 
 ```{r}
-ca_tree <- read_csv("CA_TREE.csv") 
-ca_cond <- read_csv("CA_COND.csv") 
-ca_plotsnap <- read_csv("CA_PLOTSNAP.csv") 
+ca_tree <- read_csv("CA_TREE.csv", show_col_types = FALSE) 
+ca_cond <- read_csv("CA_COND.csv", show_col_types = FALSE) 
+ca_plotsnap <- read_csv("CA_PLOTSNAP.csv", show_col_types = FALSE) 
 ```
 
 ```{r}
@@ -57,9 +57,10 @@ ca_tree_filter <- ca_tree %>%
          PLOT = as.character(PLOT),
          INVYR = as.character(INVYR),
          CONDID = as.character(CONDID),
+         tree_id = as.character(TREE),
          site = as.character(STATECD),
          plot = as.character(PLOT),
-         exp_factor = 50,
+         exp_factor = 50, # doesn't matter for tree-level comparisons 
          status = as.character(STATUSCD),
          decay_class = as.character(DECAYCD),
          species = as.character(SPCD),
@@ -68,7 +69,7 @@ ca_tree_filter <- ca_tree %>%
          ht2 = ACTUALHT,
          crown_ratio = CR/100,
          top = if_else(HT > ACTUALHT, "N", "Y"),
-         cull = CULL,
+         cull = if_else(is.na(CULL), 0, CULL),
          total_wood_fia = DRYBIO_STEM*0.45359, # for tons use 0.0005
          total_bark_fia = DRYBIO_STEM_BARK*0.45359,
          total_branch_fia = DRYBIO_BRANCH*0.45359,
@@ -78,7 +79,7 @@ ca_tree_filter <- ca_tree %>%
          stump_bark_fia = DRYBIO_STUMP_BARK*0.45359,
          foliage_fia = DRYBIO_FOLIAGE*0.45359) %>%
   select(STATECD, UNITCD, COUNTYCD, PLOT, INVYR, CONDID,
-         site, plot, exp_factor, status, decay_class, species, 
+         tree_id, site, plot, exp_factor, status, decay_class, species, 
          dbh, ht1, ht2, crown_ratio, top, cull,
          total_wood_fia, total_bark_fia, total_branch_fia,
          merch_wood_fia, merch_bark_fia,
@@ -92,10 +93,10 @@ dim(ca_tree_filter)
 
 ```{r}
 ca_bfa_data <- left_join(ca_tree_filter, ca_cond_filter, by = c("STATECD","UNITCD","COUNTYCD","PLOT","INVYR","CONDID")) %>%
-  mutate(stand_org = if_else(is.na(stand_org),"0","1")) %>%
+  mutate(stand_org = if_else(is.na(stand_org),"0", stand_org)) %>%
   left_join(ca_plot_filter, by = c("STATECD","UNITCD","COUNTYCD","PLOT")) %>%
   select(-c(STATECD, UNITCD, COUNTYCD, PLOT, INVYR, CONDID)) %>%
-  select(division, province, site, plot, stand_org, everything())
+  select(tree_id, division, province, site, plot, stand_org, everything())
 
 head(ca_bfa_data)
 dim(ca_bfa_data)
@@ -109,7 +110,7 @@ ca_check <- BiomassNSVB(data = ca_bfa_data,
 ```
 
 ```{r}
-# use 1g difference 
+# use 10g (0.01 kg) difference 
 match_check <- ca_check$dataframe %>%
   mutate(total_wood_match = as.integer(near(total_wood_kg, total_wood_fia, tol = 1e-2)),
          total_bark_match = as.integer(near(total_bark_kg, total_bark_fia, tol = 1e-2)),
@@ -118,8 +119,8 @@ match_check <- ca_check$dataframe %>%
          merch_bark_match = as.integer(near(merch_bark_kg, merch_bark_fia, tol = 1e-2)),
          stump_wood_match = as.integer(near(stump_wood_kg, stump_wood_fia, tol = 1e-2)),
          stump_bark_match = as.integer(near(stump_bark_kg, stump_bark_fia, tol = 1e-2)),
-         foliage_match = as.integer(near(foliage_kg, foliage_fia, tol = 1e-2))) %>%
-  select(province, plot, status, decay_class, species, dbh_cm, top,
+         foliage_match = as.integer(near(foliage_kg, foliage_fia, tol = 1e-3))) %>%
+  select(province, plot, tree_id, status, decay_class, species, dbh_cm, top, ht1_m, ht2_m, crown_ratio, cull,
          total_wood_kg, total_wood_fia, total_wood_match,
          total_bark_kg, total_bark_fia, total_bark_match,
          total_branch_kg, total_branch_fia, total_branch_match,
@@ -183,18 +184,6 @@ checks("total_bark_match")
 ```
 
 ```{r}
-checks("total_branch_match")
-```
-
-```{r}
-checks("merch_wood_match")
-```
-
-```{r}
-checks("merch_bark_match")
-```
-
-```{r}
 checks("stump_wood_match")
 ```
 
@@ -202,7 +191,62 @@ checks("stump_wood_match")
 checks("stump_bark_match")
 ```
 
+
+fia value is 0 when ht2 << ht1 (even when CR is not 0)
+
+```{r}
+checks("total_branch_match")
+```
+
+```{r}
+plot_exclude <- c("63305", "69013", "92216", "99974")
+
+match_check %>%
+  filter(total_branch_match == 0,
+         !plot %in% plot_exclude)
+```
+
 ```{r}
 checks("foliage_match")
+```
+
+```{r}
+plot_exclude <- c("63305", "69013", "92216", "99974")
+
+match_check %>%
+  filter(foliage_match == 0,
+         !plot %in% plot_exclude)
+```
+
+
+fia estimate > BFA for some trees where ht1 < 4m and dbh is > 12.5cm.
+Is the equation for the height to a 4 in top diameter just not always solving well given the strange dimensions? 
+
+```{r}
+checks("merch_wood_match")
+```
+
+```{r}
+plot_exclude <- c("63305", "69013", "92216", "99974")
+
+match_check %>%
+  filter(merch_wood_match == 0,
+         !plot %in% plot_exclude)
+
+match_check %>%
+  filter(ht1_m < 4, dbh_cm > 12.5,
+         !plot %in% plot_exclude)
+```
+
+```{r}
+checks("merch_bark_match")
+```
+
+```{r}
+plot_exclude <- c("63305", "69013", "92216", "99974")
+
+match_check %>%
+  filter(merch_bark_match == 0,
+         !plot %in% plot_exclude)
 ```
 
