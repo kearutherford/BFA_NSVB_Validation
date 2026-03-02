@@ -151,18 +151,6 @@ match_summary
 #write_csv(match_summary, "results.csv")
 ```
 
-|FIA name|BFA name|
-|:---|:---|
-|DRYBIO_STEM|total_wood|
-|DRYBIO_STEM_BARK|total_bark|
-|DRYBIO_BRANCH|total_branch|
-|DRYBIO_BOLE|merch_wood|
-|DRYBIO_BOLE_BARK|merch_bark|
-|DRYBIO_STUMP|stump_wood|
-|DRYBIO_STUMP_BARK|stump_bark|
-|DRYBIO_FOLIAGE|foliage|
-
-
 ```{r}
 checks <- function(var_name) {
 

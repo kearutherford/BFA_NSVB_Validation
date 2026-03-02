@@ -3,19 +3,39 @@
 library(tidyverse)
 library(BerkeleyForestsAnalytics)
 library(stringr)
-library(FIESTA)
+library(DBI)
+library(RSQLite)
+
 options(scipen = 999)
 ```
 
 ```{r}
 ca_tree <- read_csv("CA_TREE.csv", show_col_types = FALSE) 
-ca_cond <- read_csv("CA_COND.csv", show_col_types = FALSE) 
 ca_plotsnap <- read_csv("CA_PLOTSNAP.csv", show_col_types = FALSE) 
 ```
 
 ```{r}
-ca_cond_filter <- ca_cond %>%
-  filter(INVYR == 2021) %>%
+con <- dbConnect(SQLite(), "SQLite_FIADB_ENTIRE.db")
+
+cond_query <- "
+SELECT STATECD, UNITCD, COUNTYCD, PLOT,
+       INVYR, CONDID, STDORGCD
+FROM COND
+WHERE INVYR = 2021
+  AND STATECD IN (
+    1,2,4,5,6,8,9,10,12,13,
+    16,17,18,19,20,21,22,23,24,25,
+    26,27,28,29,30,31,32,33,34,35,
+    36,37,38,39,40,41,42,44,45,46,
+    47,48,49,50,51,53,54,55,56
+  )
+"
+
+cond_2021_pull <- dbGetQuery(con, cond_query)
+```
+
+```{r}
+cond <- cond_2021_pull %>%
   mutate(STATECD = as.character(STATECD),
          UNITCD = as.character(UNITCD),
          COUNTYCD = as.character(COUNTYCD),
@@ -25,11 +45,29 @@ ca_cond_filter <- ca_cond %>%
          stand_org = as.character(STDORGCD)) %>%
   select(STATECD, UNITCD, COUNTYCD, PLOT, INVYR, CONDID, stand_org)
 
-head(ca_cond_filter)
+head(cond)
+```
+
+
+
+```{r}
+plot_query <- "
+SELECT STATECD, UNITCD, COUNTYCD, PLOT, INVYR, ECOSUBCD
+FROM PLOTSNAP
+WHERE STATECD IN (
+    1,2,4,5,6,8,9,10,12,13,
+    16,17,18,19,20,21,22,23,24,25,
+    26,27,28,29,30,31,32,33,34,35,
+    36,37,38,39,40,41,42,44,45,46,
+    47,48,49,50,51,53,54,55,56
+  )
+"
+
+plot_2021_pull <- dbGetQuery(con, plot_query)
 ```
 
 ```{r}
-ca_plot_filter <- ca_plotsnap %>%
+plotsnap <- plot_2021_pull %>%
   mutate(STATECD = as.character(STATECD),
          UNITCD = as.character(UNITCD),
          COUNTYCD = as.character(COUNTYCD),
@@ -45,11 +83,35 @@ ca_plot_filter <- ca_plotsnap %>%
          division = paste0(coalesce(letter, ""), rounded_number)) %>%
   select(STATECD, UNITCD, COUNTYCD, PLOT, division, province)
 
-head(ca_plot_filter)
+head(plotsnap)
+```
+
+
+
+```{r}
+tree_query <- "
+SELECT STATECD, UNITCD, COUNTYCD, PLOT,
+       INVYR, CONDID, TREE, STATUSCD, DECAYCD,
+       SPCD, DIA, HT, ACTUALHT, CR, CULL,
+       DRYBIO_STEM, DRYBIO_STEM_BARK, DRYBIO_BRANCH,
+       DRYBIO_BOLE, DRYBIO_BOLE_BARK, DRYBIO_STUMP,
+       DRYBIO_STUMP_BARK, DRYBIO_FOLIAGE
+FROM TREE
+WHERE INVYR = 2021
+  AND STATECD IN (
+    1,2,4,5,6,8,9,10,12,13,
+    16,17,18,19,20,21,22,23,24,25,
+    26,27,28,29,30,31,32,33,34,35,
+    36,37,38,39,40,41,42,44,45,46,
+    47,48,49,50,51,53,54,55,56
+  )
+"
+
+tree_2021_pull <- dbGetQuery(con, tree_query)
 ```
 
 ```{r}
-ca_tree_filter <- ca_tree %>%
+tree <- tree_2021_pull %>%
   filter(INVYR == 2021,
          STATUSCD == 1 | STATUSCD == 2) %>%
   mutate(STATECD = as.character(STATECD),
@@ -88,19 +150,19 @@ ca_tree_filter <- ca_tree %>%
   drop_na(status, species, dbh, ht1, ht2, crown_ratio, total_wood_fia, total_bark_fia, total_branch_fia, foliage_fia) %>%
   filter(!(status == "2" & is.na(decay_class)))
 
-head(ca_tree_filter)
-dim(ca_tree_filter)
+head(tree)
+dim(tree)
 ```
 
 ```{r}
-ca_bfa_data <- left_join(ca_tree_filter, ca_cond_filter, by = c("STATECD","UNITCD","COUNTYCD","PLOT","INVYR","CONDID")) %>%
+bfa_data <- left_join(tree, cond, by = c("STATECD","UNITCD","COUNTYCD","PLOT","INVYR","CONDID")) %>%
   mutate(stand_org = if_else(is.na(stand_org),"0", stand_org)) %>%
-  left_join(ca_plot_filter, by = c("STATECD","UNITCD","COUNTYCD","PLOT")) %>%
+  left_join(plot, by = c("STATECD","UNITCD","COUNTYCD","PLOT")) %>%
   select(-c(STATECD, UNITCD, COUNTYCD, PLOT, INVYR, CONDID)) %>%
   select(tree_id, division, province, site, plot, stand_org, everything())
 
-head(ca_bfa_data)
-dim(ca_bfa_data)
+head(bfa_data)
+dim(bfa_data)
 ```
 
 ```{r}
