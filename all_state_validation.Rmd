@@ -3,18 +3,40 @@
 library(tidyverse)
 library(BerkeleyForestsAnalytics)
 library(stringr)
+library(DBI)
+library(RSQLite)
+library(R.utils)
+library(readr)
 options(scipen = 999)
 ```
 
+
+################################################################################
+DB queries 
+################################################################################
+
 ```{r}
-ca_tree <- read_csv("CA_TREE.csv", show_col_types = FALSE) 
-ca_cond <- read_csv("CA_COND.csv", show_col_types = FALSE) 
-ca_plotsnap <- read_csv("CA_PLOTSNAP.csv", show_col_types = FALSE) 
+con <- dbConnect(SQLite(), "SQLite_FIADB_ENTIRE.db")
+
+cond_query <- "
+SELECT STATECD, UNITCD, COUNTYCD, PLOT,
+       INVYR, CONDID, STDORGCD
+FROM COND
+WHERE INVYR = 2021
+  AND STATECD IN (
+    1,2,4,5,6,8,9,10,12,13,
+    16,17,18,19,20,21,22,23,24,25,
+    26,27,28,29,30,31,32,33,34,35,
+    36,37,38,39,40,41,42,44,45,46,
+    47,48,49,50,51,53,54,55,56
+  )
+"
+
+cond_2021_pull <- dbGetQuery(con, cond_query)
 ```
 
 ```{r}
-ca_cond_filter <- ca_cond %>%
-  filter(INVYR == 2021) %>%
+cond <- cond_2021_pull %>%
   mutate(STATECD = as.character(STATECD),
          UNITCD = as.character(UNITCD),
          COUNTYCD = as.character(COUNTYCD),
@@ -24,16 +46,35 @@ ca_cond_filter <- ca_cond %>%
          stand_org = as.character(STDORGCD)) %>%
   select(STATECD, UNITCD, COUNTYCD, PLOT, INVYR, CONDID, stand_org)
 
-head(ca_cond_filter)
+head(cond)
+rm(cond_2021_pull)
+```
+
+
+```{r}
+plot_query <- "
+SELECT STATECD, UNITCD, COUNTYCD, PLOT, INVYR, ECOSUBCD
+FROM PLOTGEOM
+WHERE STATECD IN (
+    1,2,4,5,6,8,9,10,12,13,
+    16,17,18,19,20,21,22,23,24,25,
+    26,27,28,29,30,31,32,33,34,35,
+    36,37,38,39,40,41,42,44,45,46,
+    47,48,49,50,51,53,54,55,56
+  )
+"
+
+plot_2021_pull <- dbGetQuery(con, plot_query)
 ```
 
 ```{r}
-ca_plot_filter <- ca_plotsnap %>%
+plotgeom <- plot_2021_pull %>%
   mutate(STATECD = as.character(STATECD),
          UNITCD = as.character(UNITCD),
          COUNTYCD = as.character(COUNTYCD),
          PLOT = as.character(PLOT),
          INVYR = as.integer(INVYR)) %>%
+  filter(!is.na(ECOSUBCD)) %>%
   group_by(STATECD, UNITCD, COUNTYCD, PLOT) %>%
   slice_max(INVYR, with_ties = FALSE) %>%
   ungroup() %>%
@@ -44,11 +85,35 @@ ca_plot_filter <- ca_plotsnap %>%
          division = paste0(coalesce(letter, ""), rounded_number)) %>%
   select(STATECD, UNITCD, COUNTYCD, PLOT, division, province)
 
-head(ca_plot_filter)
+head(plotgeom)
+rm(plot_2021_pull)
+```
+
+
+```{r}
+tree_query <- "
+SELECT STATECD, UNITCD, COUNTYCD, PLOT,
+       INVYR, CONDID, TREE, STATUSCD, DECAYCD,
+       SPCD, DIA, HT, ACTUALHT, CR, CULL,
+       DRYBIO_STEM, DRYBIO_STEM_BARK, DRYBIO_BRANCH,
+       DRYBIO_BOLE, DRYBIO_BOLE_BARK, DRYBIO_STUMP,
+       DRYBIO_STUMP_BARK, DRYBIO_FOLIAGE
+FROM TREE
+WHERE INVYR = 2021
+  AND STATECD IN (
+    1,2,4,5,6,8,9,10,12,13,
+    16,17,18,19,20,21,22,23,24,25,
+    26,27,28,29,30,31,32,33,34,35,
+    36,37,38,39,40,41,42,44,45,46,
+    47,48,49,50,51,53,54,55,56
+  )
+"
+
+tree_2021_pull <- dbGetQuery(con, tree_query)
 ```
 
 ```{r}
-ca_tree_filter <- ca_tree %>%
+tree <- tree_2021_pull %>%
   filter(INVYR == 2021,
          STATUSCD == 1 | STATUSCD == 2) %>%
   mutate(STATECD = as.character(STATECD),
@@ -87,31 +152,79 @@ ca_tree_filter <- ca_tree %>%
   drop_na(status, species, dbh, ht1, ht2, crown_ratio, total_wood_fia, total_bark_fia, total_branch_fia, foliage_fia) %>%
   filter(!(status == "2" & is.na(decay_class)))
 
-head(ca_tree_filter)
-dim(ca_tree_filter)
+head(tree)
+dim(tree)
+rm(tree_2021_pull)
 ```
 
+
+################################################################################
+Loop each state through BFA 
+################################################################################
+
 ```{r}
-ca_bfa_data <- left_join(ca_tree_filter, ca_cond_filter, by = c("STATECD","UNITCD","COUNTYCD","PLOT","INVYR","CONDID")) %>%
-  mutate(stand_org = if_else(is.na(stand_org),"0", stand_org)) %>%
-  left_join(ca_plot_filter, by = c("STATECD","UNITCD","COUNTYCD","PLOT")) %>%
+bfa_data <- left_join(tree, cond, by = c("STATECD","UNITCD","COUNTYCD","PLOT","INVYR","CONDID")) %>%
+  left_join(plotgeom, by = c("STATECD","UNITCD","COUNTYCD","PLOT")) %>%
   select(-c(STATECD, UNITCD, COUNTYCD, PLOT, INVYR, CONDID)) %>%
   select(tree_id, division, province, site, plot, stand_org, everything())
 
-head(ca_bfa_data)
-dim(ca_bfa_data)
+head(bfa_data)
+dim(bfa_data)
 ```
 
 ```{r}
-ca_check <- BiomassNSVB(data = ca_bfa_data,
-                        results = "by_tree",
-                        input_units = "imperial",
-                        output_units = "metric")
+all_states <- as.character(c(1,2,4,5,6,8,9,10,12,13,16,17,
+                             18,19,20,21,22,23,24,25,26,27,
+                             28,29,30,31,32,33,34,35,36,37,
+                             38,39,40,41,42,44,45,46,47,48,
+                             49,50,51,53,54,55,56))
+
+for (state in all_states) {
+  
+  state_check <- tryCatch(
+    
+    withTimeout({
+      
+      state_data <- bfa_data %>% 
+        filter(site == state)
+      
+      BiomassNSVB(data = state_data,
+                  results = "by_tree",
+                  input_units = "imperial",
+                  output_units = "metric")
+      
+    }, timeout = 10*60, onTimeout = "error"),
+    
+    error = function(e) NULL
+    
+  )
+  
+  if (is.null(state_check)) {
+    message("Skipped state: ", state)
+    next
+  }
+  
+  write_csv(state_check$dataframe, paste0("data/bfa_state_data/output_", state, ".csv"))
+}
+```
+
+
+################################################################################
+Check for matching 
+################################################################################
+
+```{r}
+state_files <- list.files("data/bfa_state_data", pattern = "\\.csv$", full.names = TRUE)
+
+all_check <- state_files %>%
+  lapply(read_csv, col_types = cols(division = col_character(),
+                                    province = col_character())) %>%
+  bind_rows()
 ```
 
 ```{r}
-# use 10g (0.01 kg) difference 
-match_check <- ca_check$dataframe %>%
+match_check <- all_check %>%
+  # use 10g (0.01 kg) difference 
   mutate(total_wood_match = as.integer(near(total_wood_kg, total_wood_fia, tol = 1e-2)),
          total_bark_match = as.integer(near(total_bark_kg, total_bark_fia, tol = 1e-2)),
          total_branch_match = as.integer(near(total_branch_kg, total_branch_fia, tol = 1e-2)),
@@ -119,8 +232,8 @@ match_check <- ca_check$dataframe %>%
          merch_bark_match = as.integer(near(merch_bark_kg, merch_bark_fia, tol = 1e-2)),
          stump_wood_match = as.integer(near(stump_wood_kg, stump_wood_fia, tol = 1e-2)),
          stump_bark_match = as.integer(near(stump_bark_kg, stump_bark_fia, tol = 1e-2)),
-         foliage_match = as.integer(near(foliage_kg, foliage_fia, tol = 1e-3))) %>%
-  select(province, plot, tree_id, status, decay_class, species, dbh_cm, top, ht1_m, ht2_m, crown_ratio, cull,
+         foliage_match = as.integer(near(foliage_kg, foliage_fia, tol = 1e-3))) %>% # use 1g (0.001 kg) difference 
+  select(division, province, plot, tree_id, status, decay_class, species, dbh_cm, top, ht1_m, ht2_m, crown_ratio, cull,
          total_wood_kg, total_wood_fia, total_wood_match,
          total_bark_kg, total_bark_fia, total_bark_match,
          total_branch_kg, total_branch_fia, total_branch_match,
@@ -135,8 +248,8 @@ head(match_check)
 
 ```{r}
 match_summary <- match_check %>%
-  summarize(total_n_trees = n(),
-            #merch_stump_n = sum(!is.na(merch_wood_match)),
+  summarize(total_n = n(),
+            merch_stump_n = sum(!is.na(merch_wood_match)),
             total_wood = (sum(total_wood_match)/n())*100,
             total_bark = (sum(total_bark_match)/n())*100,
             total_branch = (sum(total_branch_match)/n())*100,
@@ -148,106 +261,6 @@ match_summary <- match_check %>%
             stump_bark = (sum(stump_bark_match, na.rm=TRUE)/sum(!is.na(stump_bark_match)))*100)
 
 match_summary
-#write_csv(match_summary, "results.csv")
-```
-
-```{r}
-checks <- function(var_name) {
-
-  plot_df <- match_check %>%
-    filter(.data[[var_name]] == 0) %>%
-    group_by(plot) %>%
-    summarize(n = n())
-  
-  sp_df <- match_check %>%
-    mutate(match = case_when(.data[[var_name]] > 0.5 ~ "no_error_n",
-                             .data[[var_name]]< 0.5 ~ "error_n")) %>%
-    group_by(species, match) %>%
-    count() %>%
-    ungroup() %>%
-    pivot_wider(names_from = match, values_from = n, values_fill = 0) %>%
-    mutate(total_n = error_n + no_error_n,
-           percent_in_pop = (total_n/sum(total_n))*100,
-           percent_w_error = (error_n/total_n)*100) %>%
-    filter(error_n > 0)
-    
-  return(list(plot_df, sp_df))
-  
-}
-```
-
-```{r}
-checks("total_wood_match")
-```
-
-```{r}
-checks("total_bark_match")
-```
-
-```{r}
-checks("stump_wood_match")
-```
-
-```{r}
-checks("stump_bark_match")
-```
-
-
-fia value is 0 when ht2 << ht1 (even when CR is not 0)
-
-```{r}
-checks("total_branch_match")
-```
-
-```{r}
-plot_exclude <- c("63305", "69013", "92216", "99974")
-
-match_check %>%
-  filter(total_branch_match == 0,
-         !plot %in% plot_exclude)
-```
-
-```{r}
-checks("foliage_match")
-```
-
-```{r}
-plot_exclude <- c("63305", "69013", "92216", "99974")
-
-match_check %>%
-  filter(foliage_match == 0,
-         !plot %in% plot_exclude)
-```
-
-
-fia estimate > BFA for some trees where ht1 < 4m and dbh is > 12.5cm.
-Is the equation for the height to a 4 in top diameter just not always solving well given the strange dimensions? 
-
-```{r}
-checks("merch_wood_match")
-```
-
-```{r}
-plot_exclude <- c("63305", "69013", "92216", "99974")
-
-match_check %>%
-  filter(merch_wood_match == 0,
-         !plot %in% plot_exclude)
-
-match_check %>%
-  filter(ht1_m < 4, dbh_cm > 12.5,
-         !plot %in% plot_exclude)
-```
-
-```{r}
-checks("merch_bark_match")
-```
-
-```{r}
-plot_exclude <- c("63305", "69013", "92216", "99974")
-
-match_check %>%
-  filter(merch_bark_match == 0,
-         !plot %in% plot_exclude)
+write_csv(match_summary, "data/match_results.csv")
 ```
 

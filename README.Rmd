@@ -26,14 +26,14 @@ Specifically, we compare our implementation of the national-scale volume and bio
 ### General workflow
 
 The annual FIA inventory samples approximately 10% of the FIA plots in each state. The 10% of plots are intentionally spread out across the state. 
-We pulled FIA data for all 50 states for inventory year 2021 (2021 was the most recent year where data were available for every state), representing roughly 10% of FIA trees, spread fairly evenly across the country. 
+We pulled FIA data for the continental US states for inventory year 2021 (2021 was the most recent year where data were available for every state), representing roughly 10% of FIA trees, spread fairly evenly across the country. 
 
 FIA internally applies the NSVB framework to estimate various biomass components for each tree. We ran the 2021 subset of trees through the `BiomassNSVB()` function in BerkeleyForestsAnalytics. For each tree and biomass component, we verified that the FIA NSVB estimate and the BFA NSVB estimate were consistent to within 10 g (0.01 kg). For foliage biomass, whose values are generally much smaller, we sued a tighter tolerance of 1 g (0.001 kg). Because of computer precision limits and minor rounding differences, obtaining exact numerical agreement is not practical. The specified tolerances reflect an appropriate and operationally meaningful standard of consistency.
 
 
 ### Main results 
 
-The table below shows the main takeaway results. For all biomass variables, FIA and BFA NSVB estimates matched (by our consistency criteria described above) for >99% of the trees.
+The table below shows the main takeaway results. For all biomass variables, FIA and BFA NSVB estimates matched (by our consistency criteria described above) for ~99% of the trees.
 
 ```{r, include=FALSE}
 library(readr)
@@ -43,7 +43,7 @@ library(dplyr)
 
 ```{r}
 #| echo: false
-read_csv("results.csv", show_col_types = FALSE) %>%
+read_csv("data/match_results.csv", show_col_types = FALSE) %>%
   kable(format = "markdown", digits = 3)
 ```
 
@@ -52,7 +52,12 @@ FIA fuzzes all publicly released plot locations and swaps a small subset of plot
 
 ### Description of files in repository
 
-* **NAME:** description
+* **all_state_validation.Rmd:** workflow for validating biomass estimates from all continental US states.
+* **ca_validation.Rmd:** workflow for validating biomass estimates from California.
+* **data folder:** 
+  * bfa_state_data: used in the all_state_validation.Rmd workflow
+  * ca_fia_data: CA data pulled from the FIA DataMart
+  * match_results.csv: main takeaway results from the all_state_validation.Rmd. These results are presented above in the "Main results" section of the README. 
 
 
 ### References 

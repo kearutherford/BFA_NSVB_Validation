@@ -1,0 +1,272 @@
+
+```{r}
+library(tidyverse)
+library(BerkeleyForestsAnalytics)
+library(stringr)
+options(scipen = 999)
+```
+
+
+################################################################################
+Subset and prep data 
+################################################################################
+
+```{r}
+ca_tree <- read_csv("data/ca_fia_data/CA_TREE.csv", show_col_types = FALSE) 
+ca_cond <- read_csv("data/ca_fia_data/CA_COND.csv", show_col_types = FALSE) 
+ca_plotsnap <- read_csv("data/ca_fia_data/CA_PLOTSNAP.csv", show_col_types = FALSE) 
+```
+
+```{r}
+ca_cond_filter <- ca_cond %>%
+  filter(INVYR == 2021) %>%
+  mutate(STATECD = as.character(STATECD),
+         UNITCD = as.character(UNITCD),
+         COUNTYCD = as.character(COUNTYCD),
+         PLOT = as.character(PLOT),
+         INVYR = as.character(INVYR),
+         CONDID = as.character(CONDID),
+         stand_org = as.character(STDORGCD)) %>%
+  select(STATECD, UNITCD, COUNTYCD, PLOT, INVYR, CONDID, stand_org)
+
+head(ca_cond_filter)
+```
+
+```{r}
+ca_plot_filter <- ca_plotsnap %>%
+  mutate(STATECD = as.character(STATECD),
+         UNITCD = as.character(UNITCD),
+         COUNTYCD = as.character(COUNTYCD),
+         PLOT = as.character(PLOT),
+         INVYR = as.integer(INVYR)) %>%
+  group_by(STATECD, UNITCD, COUNTYCD, PLOT) %>%
+  slice_max(INVYR, with_ties = FALSE) %>%
+  ungroup() %>%
+  mutate(province = str_extract(ECOSUBCD, "^[A-Za-z]?\\d{3}"),
+         letter = str_extract(province, "^[A-Za-z]"),
+         number = as.numeric(str_extract(province, "\\d{3}")),
+         rounded_number = floor(number/10)*10,
+         division = paste0(coalesce(letter, ""), rounded_number)) %>%
+  select(STATECD, UNITCD, COUNTYCD, PLOT, division, province)
+
+head(ca_plot_filter)
+```
+
+```{r}
+ca_tree_filter <- ca_tree %>%
+  filter(INVYR == 2021,
+         STATUSCD == 1 | STATUSCD == 2) %>%
+  mutate(STATECD = as.character(STATECD),
+         UNITCD = as.character(UNITCD),
+         COUNTYCD = as.character(COUNTYCD),
+         PLOT = as.character(PLOT),
+         INVYR = as.character(INVYR),
+         CONDID = as.character(CONDID),
+         tree_id = as.character(TREE),
+         site = as.character(STATECD),
+         plot = as.character(PLOT),
+         exp_factor = 50, # doesn't matter for tree-level comparisons 
+         status = as.character(STATUSCD),
+         decay_class = as.character(DECAYCD),
+         species = as.character(SPCD),
+         dbh = DIA,
+         ht1 = HT,
+         ht2 = ACTUALHT,
+         crown_ratio = CR/100,
+         top = if_else(HT > ACTUALHT, "N", "Y"),
+         cull = if_else(is.na(CULL), 0, CULL),
+         total_wood_fia = DRYBIO_STEM*0.45359, # for tons use 0.0005
+         total_bark_fia = DRYBIO_STEM_BARK*0.45359,
+         total_branch_fia = DRYBIO_BRANCH*0.45359,
+         merch_wood_fia = DRYBIO_BOLE*0.45359,
+         merch_bark_fia = DRYBIO_BOLE_BARK*0.45359,
+         stump_wood_fia = DRYBIO_STUMP*0.45359,
+         stump_bark_fia = DRYBIO_STUMP_BARK*0.45359,
+         foliage_fia = DRYBIO_FOLIAGE*0.45359) %>%
+  select(STATECD, UNITCD, COUNTYCD, PLOT, INVYR, CONDID,
+         tree_id, site, plot, exp_factor, status, decay_class, species, 
+         dbh, ht1, ht2, crown_ratio, top, cull,
+         total_wood_fia, total_bark_fia, total_branch_fia,
+         merch_wood_fia, merch_bark_fia,
+         stump_wood_fia, stump_bark_fia, foliage_fia) %>%
+  drop_na(status, species, dbh, ht1, ht2, crown_ratio, total_wood_fia, total_bark_fia, total_branch_fia, foliage_fia) %>%
+  filter(!(status == "2" & is.na(decay_class)))
+
+head(ca_tree_filter)
+dim(ca_tree_filter)
+```
+
+```{r}
+ca_bfa_data <- left_join(ca_tree_filter, ca_cond_filter, by = c("STATECD","UNITCD","COUNTYCD","PLOT","INVYR","CONDID")) %>%
+  left_join(ca_plot_filter, by = c("STATECD","UNITCD","COUNTYCD","PLOT")) %>%
+  select(-c(STATECD, UNITCD, COUNTYCD, PLOT, INVYR, CONDID)) %>%
+  select(tree_id, division, province, site, plot, stand_org, everything())
+
+head(ca_bfa_data)
+dim(ca_bfa_data)
+```
+
+
+################################################################################
+Run through BerkeleyForestsAnalytics and check for matching
+################################################################################
+
+```{r}
+ca_check <- BiomassNSVB(data = ca_bfa_data,
+                        results = "by_tree",
+                        input_units = "imperial",
+                        output_units = "metric")
+```
+
+```{r}
+# use 10g (0.01 kg) difference 
+match_check <- ca_check$dataframe %>%
+  mutate(total_wood_match = as.integer(near(total_wood_kg, total_wood_fia, tol = 1e-2)),
+         total_bark_match = as.integer(near(total_bark_kg, total_bark_fia, tol = 1e-2)),
+         total_branch_match = as.integer(near(total_branch_kg, total_branch_fia, tol = 1e-2)),
+         merch_wood_match = as.integer(near(merch_wood_kg, merch_wood_fia, tol = 1e-2)),
+         merch_bark_match = as.integer(near(merch_bark_kg, merch_bark_fia, tol = 1e-2)),
+         stump_wood_match = as.integer(near(stump_wood_kg, stump_wood_fia, tol = 1e-2)),
+         stump_bark_match = as.integer(near(stump_bark_kg, stump_bark_fia, tol = 1e-2)),
+         foliage_match = as.integer(near(foliage_kg, foliage_fia, tol = 1e-3))) %>%
+  select(division, province, plot, tree_id, status, decay_class, species, dbh_cm, top, ht1_m, ht2_m, crown_ratio, cull,
+         total_wood_kg, total_wood_fia, total_wood_match,
+         total_bark_kg, total_bark_fia, total_bark_match,
+         total_branch_kg, total_branch_fia, total_branch_match,
+         merch_wood_kg, merch_wood_fia, merch_wood_match,
+         merch_bark_kg, merch_bark_fia, merch_bark_match,
+         stump_wood_kg, stump_wood_fia, stump_wood_match,
+         stump_bark_kg, stump_bark_fia, stump_bark_match,
+         foliage_kg, foliage_fia, foliage_match)
+
+head(match_check)
+```
+
+```{r}
+match_summary <- match_check %>%
+  summarize(total_n_trees = n(),
+            #merch_stump_n = sum(!is.na(merch_wood_match)),
+            total_wood = (sum(total_wood_match)/n())*100,
+            total_bark = (sum(total_bark_match)/n())*100,
+            total_branch = (sum(total_branch_match)/n())*100,
+            foliage = (sum(foliage_match)/n())*100,
+            # no merch or stump calculated for trees with dbh < 12.5 cm (5 in) in either BFA or FIA
+            merch_wood = (sum(merch_wood_match, na.rm=TRUE)/sum(!is.na(merch_wood_match)))*100,
+            merch_bark = (sum(merch_bark_match, na.rm=TRUE)/sum(!is.na(merch_bark_match)))*100,
+            stump_wood = (sum(stump_wood_match, na.rm=TRUE)/sum(!is.na(stump_wood_match)))*100,
+            stump_bark = (sum(stump_bark_match, na.rm=TRUE)/sum(!is.na(stump_bark_match)))*100)
+
+match_summary
+```
+
+
+################################################################################
+Break down mismatches
+################################################################################
+
+```{r}
+checks <- function(var_name) {
+
+  plot_df <- match_check %>%
+    filter(.data[[var_name]] == 0) %>%
+    group_by(plot) %>%
+    summarize(n = n())
+  
+  sp_df <- match_check %>%
+    mutate(match = case_when(.data[[var_name]] > 0.5 ~ "no_error_n",
+                             .data[[var_name]]< 0.5 ~ "error_n")) %>%
+    group_by(species, match) %>%
+    count() %>%
+    ungroup() %>%
+    pivot_wider(names_from = match, values_from = n, values_fill = 0) %>%
+    mutate(total_n = error_n + no_error_n,
+           percent_in_pop = (total_n/sum(total_n))*100,
+           percent_w_error = (error_n/total_n)*100) %>%
+    filter(error_n > 0)
+    
+  return(list(plot_df, sp_df))
+  
+}
+```
+
+-------------------------------------->
+For these variables, all mismatches are clustered in the same 4 plots.
+Likely a result of plot fuzzing and swapping. 
+
+```{r}
+checks("total_wood_match")
+```
+
+```{r}
+checks("total_bark_match")
+```
+
+```{r}
+checks("stump_wood_match")
+```
+
+```{r}
+checks("stump_bark_match")
+```
+
+
+-------------------------------------->
+For these variables, there are mismatches outside of those 4 plots. 
+Observations: The FIA value is 0 in all these cases while the BFA value is small.
+Seems to be all cases where ht2 << ht1, but crown ratio is not 0. 
+Why is FIA zeroing these values? 
+
+```{r}
+checks("total_branch_match")
+```
+
+```{r}
+plot_exclude <- c("63305", "69013", "92216", "99974") # the 4 plots that most mismatches are clustered in 
+
+match_check %>%
+  filter(total_branch_match == 0,
+         !plot %in% plot_exclude) %>%
+  select(division, plot, species, ht1_m, ht2_m, crown_ratio, total_branch_kg, total_branch_fia)
+```
+
+```{r}
+checks("foliage_match")
+```
+
+```{r}
+match_check %>%
+  filter(foliage_match == 0,
+         !plot %in% plot_exclude) %>%
+  select(division, plot, species, ht1_m, ht2_m, crown_ratio, foliage_kg, foliage_fia)
+```
+
+
+-------------------------------------->
+For these (merch) variables, there are mismatches outside of those 4 plots. 
+Observations: The FIA values are slightly > the BFA values.
+These all seem to be cases where ht1 < 4m and dbh is > 12.5cm 
+(which are strange dimensions for trees with a top, which they all are).
+Is the equation for the height to a 4 in top diameter just not always solving well, given the strange dimensions?
+
+```{r}
+checks("merch_wood_match")
+```
+
+```{r}
+match_check %>%
+  filter(merch_wood_match == 0,
+         !plot %in% plot_exclude) %>%
+  select(division, plot, species, dbh_cm, ht1_m, ht2_m, merch_wood_kg, merch_wood_fia)
+```
+
+```{r}
+checks("merch_bark_match")
+```
+
+```{r}
+match_check %>%
+  filter(merch_bark_match == 0,
+         !plot %in% plot_exclude) %>%
+  select(division, plot, species, dbh_cm, ht1_m, ht2_m, merch_bark_kg, merch_bark_fia)
+```
+

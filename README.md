@@ -25,10 +25,10 @@ estimating tree biomass with FIA’s implementation of NSVB.
 
 The annual FIA inventory samples approximately 10% of the FIA plots in
 each state. The 10% of plots are intentionally spread out across the
-state. We pulled FIA data for all 50 states for inventory year 2021
-(2021 was the most recent year where data were available for every
-state), representing roughly 10% of FIA trees, spread fairly evenly
-across the country.
+state. We pulled FIA data for the continental US states for inventory
+year 2021 (2021 was the most recent year where data were available for
+every state), representing roughly 10% of FIA trees, spread fairly
+evenly across the country.
 
 FIA internally applies the NSVB framework to estimate various biomass
 components for each tree. We ran the 2021 subset of trees through the
@@ -45,11 +45,11 @@ operationally meaningful standard of consistency.
 
 The table below shows the main takeaway results. For all biomass
 variables, FIA and BFA NSVB estimates matched (by our consistency
-criteria described above) for \>99% of the trees.
+criteria described above) for ~99% of the trees.
 
-| total_n_trees | total_wood | total_bark | total_branch | foliage | merch_wood | merch_bark | stump_wood | stump_bark |
-|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 23537 | 99.669 | 99.703 | 99.643 | 99.622 | 99.615 | 99.652 | 99.689 | 99.694 |
+| total_n | merch_stump_n | total_wood | total_bark | total_branch | foliage | merch_wood | merch_bark | stump_wood | stump_bark |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 494376 | 404758 | 99.077 | 99.122 | 99.303 | 99.68 | 98.958 | 99.008 | 99.582 | 99.627 |
 
 FIA fuzzes all publicly released plot locations and swaps a small subset
 of plot locations. As a result, for a small percentage of plots, the
@@ -66,7 +66,16 @@ discrepancy, as expected.
 
 ### Description of files in repository
 
-- **NAME:** description
+- **all_state_validation.Rmd:** workflow for validating biomass
+  estimates from all continental US states.
+- **ca_validation.Rmd:** workflow for validating biomass estimates from
+  California.
+- **data folder:**
+  - bfa_state_data: used in the all_state_validation.Rmd workflow
+  - ca_fia_data: CA data pulled from the FIA DataMart
+  - match_results.csv: main takeaway results from the
+    all_state_validation.Rmd. These results are presented above in the
+    “Main results” section of the README.
 
 ### References
 
