@@ -161,13 +161,10 @@ bfa_data <- left_join(tree, cond, by = c("STATECD","UNITCD","COUNTYCD","PLOT","I
   #mutate(stand_org = if_else(is.na(stand_org),"0", stand_org)) %>%
   left_join(plotgeom, by = c("STATECD","UNITCD","COUNTYCD","PLOT")) %>%
   select(-c(STATECD, UNITCD, COUNTYCD, PLOT, INVYR, CONDID)) %>%
-  select(tree_id, division, province, site, plot, stand_org, everything()) %>%
-  filter(!(ht1 < 13 & dbh > 5)) # remove these trees with odd dimensions 
+  select(tree_id, division, province, site, plot, stand_org, everything())
 
 head(bfa_data)
 dim(bfa_data)
-
-bfa_data %>% filter(species == "122", division == "M340")
 ```
 
 ```{r}
@@ -202,22 +199,24 @@ for (state in all_states) {
     next
   }
   
-  write_csv(state_check$dataframe, paste0("state_data/output_", state, ".csv"))
+  write_csv(state_check$dataframe, paste0("state_data_v2/output_", state, ".csv"))
 }
 ```
 
 
 
+
+
 ```{r}
 state_49_data <- bfa_data %>% filter(site == "49")
-state_49_data <- state_49_data[-c(1422, 1429, 1432, 1659, 1661, 1697, 1733, 1734, 1735, 1736, 1737, 1738, 1739, 1740, 1741, 1742, 1743, 1744, 1745, 1746, 1747, 1748, 1749, 1754, 1757, 1758, 1760, 1761, 1762, 1780, 1785, 1786, 1787, 1788, 1798, 1799, 1800, 1801, 1802, 1803, 1804, 1805, 1806, 1807, 1868, 2056, 2057, 2058, 2059, 2060, 2061, 2062, 2063, 2064, 2065, 2066, 2067, 2102),]
+#state_49_data <- state_49_data[-c(1422, 1429, 1432, 1659, 1661, 1697, 1733, 1734, 1735, 1736, 1737, 1738, 1739, 1740, 1741, 1742, 1743, 1744, 1745, 1746, 1747, 1748, 1749, 1754, 1757, 1758, 1760, 1761, 1762, 1780, 1785, 1786, 1787, 1788, 1798, 1799, 1800, 1801, 1802, 1803, 1804, 1805, 1806, 1807, 1868, 2056, 2057, 2058, 2059, 2060, 2061, 2062, 2063, 2064, 2065, 2066, 2067, 2102),]
 
 state_49_check <- BiomassNSVB(data = state_49_data,
                               results = "by_tree",
                               input_units = "imperial",
                               output_units = "metric")
 
-write_csv(state_49_check$dataframe, paste0("state_data/output_49.csv"))
+#write_csv(state_49_check$dataframe, paste0("state_data/output_49.csv"))
 ```
 
 ```{r}
@@ -227,18 +226,27 @@ state_49_data[c(1422, 1429, 1432, 1659, 1661, 1697, 1733, 1734, 1735, 1736, 1737
 state_49_data %>% filter(species == "122", division == "M340")
 ```
 
+```{r}
+state_49_bad <- bfa_data %>% filter(site == "49")
+state_49_bad <- state_49_bad[c(1422, 1429, 1432, 1659, 1661, 1697, 1733, 1734, 1735, 1736, 1737, 1738, 1739, 1740, 1741, 1742, 1743, 1744, 1745, 1746, 1747, 1748, 1749, 1754, 1757, 1758, 1760, 1761, 1762, 1780, 1785, 1786, 1787, 1788, 1798, 1799, 1800, 1801, 1802, 1803, 1804, 1805, 1806, 1807, 1868, 2056, 2057, 2058, 2059, 2060, 2061, 2062, 2063, 2064, 2065, 2066, 2067, 2102),]
+
+state_49_check_bad <- BiomassNSVB(data = state_49_bad,
+                              results = "by_tree",
+                              input_units = "imperial",
+                              output_units = "metric")
+```
 
 
 ```{r}
-state_32_data <- bfa_data %>% filter(site == "32")
-state_32_data <- state_32_data[-c(61, 63),]
+state_32_data <- bfa_data %>% filter(site == "36")
+#state_32_data <- state_32_data[-c(61, 63),]
 
 state_32_check <- BiomassNSVB(data = state_32_data,
                               results = "by_tree",
                               input_units = "imperial",
                               output_units = "metric")
 
-write_csv(state_32_check$dataframe, paste0("state_data/output_32.csv"))
+#write_csv(state_32_check$dataframe, paste0("state_data_v2/output_36.csv"))
 ```
 
 ```{r}
@@ -251,8 +259,9 @@ state_32_data %>% filter(species == "122", division == "M340")
 
 
 
+
 ```{r}
-state_files <- list.files("state_data", pattern = "\\.csv$", full.names = TRUE)
+state_files <- list.files("state_data_v2", pattern = "\\.csv$", full.names = TRUE)
 
 all_check <- state_files %>%
   lapply(read_csv, col_types = cols(division = col_character(),
