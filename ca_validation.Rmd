@@ -83,7 +83,8 @@ ca_tree_filter <- ca_tree %>%
          stump_wood_fia = DRYBIO_STUMP*0.45359,
          stump_bark_fia = DRYBIO_STUMP_BARK*0.45359,
          foliage_fia = DRYBIO_FOLIAGE*0.45359) %>%
-  select(STATECD, UNITCD, COUNTYCD, PLOT, INVYR, CONDID,
+  select(STATECD, UNITCD, COUNTYCD, PLOT, INVYR, CONDID, 
+         CN, TREE, STATUSCD, DECAYCD, SPCD, DIA, HT, ACTUALHT, # can delete later 
          tree_id, site, plot, exp_factor, status, decay_class, species, 
          dbh, ht1, ht2, crown_ratio, top, cull,
          total_wood_fia, total_bark_fia, total_branch_fia,
@@ -99,7 +100,7 @@ dim(ca_tree_filter)
 ```{r}
 ca_bfa_data <- left_join(ca_tree_filter, ca_cond_filter, by = c("STATECD","UNITCD","COUNTYCD","PLOT","INVYR","CONDID")) %>%
   left_join(ca_plot_filter, by = c("STATECD","UNITCD","COUNTYCD","PLOT")) %>%
-  select(-c(STATECD, UNITCD, COUNTYCD, PLOT, INVYR, CONDID)) %>%
+  #select(-c(STATECD, UNITCD, COUNTYCD, PLOT, INVYR, CONDID)) %>%
   select(tree_id, division, province, site, plot, stand_org, everything())
 
 head(ca_bfa_data)
@@ -129,7 +130,10 @@ match_check <- ca_check$dataframe %>%
          stump_wood_match = as.integer(near(stump_wood_kg, stump_wood_fia, tol = 1e-2)),
          stump_bark_match = as.integer(near(stump_bark_kg, stump_bark_fia, tol = 1e-2)),
          foliage_match = as.integer(near(foliage_kg, foliage_fia, tol = 1e-3))) %>%
-  select(division, province, plot, tree_id, status, decay_class, species, dbh_cm, top, ht1_m, ht2_m, crown_ratio, cull,
+  select(STATECD, UNITCD, COUNTYCD, PLOT, INVYR, CONDID, 
+         CN, TREE, STATUSCD, DECAYCD, SPCD, DIA, HT, ACTUALHT,
+         division, province, plot, tree_id, status, decay_class, 
+         species, dbh_cm, top, ht1_m, ht2_m, crown_ratio, cull,
          total_wood_kg, total_wood_fia, total_wood_match,
          total_bark_kg, total_bark_fia, total_bark_match,
          total_branch_kg, total_branch_fia, total_branch_match,
@@ -230,6 +234,19 @@ match_check %>%
 ```
 
 ```{r}
+branch_share <- match_check %>%
+  filter(total_branch_match == 0) %>%
+  mutate(CR = crown_ratio*100,
+         DRYBIO_BRANCH_fia_kg = total_branch_fia,
+         DRYBIO_BRANCH_bfa_kg = total_branch_kg) %>%
+  select(STATECD, UNITCD, COUNTYCD, PLOT, INVYR, 
+         CN, TREE, STATUSCD, DECAYCD, SPCD, DIA, HT, ACTUALHT, CR,
+         division, province, DRYBIO_BRANCH_bfa_kg, DRYBIO_BRANCH_fia_kg)
+
+#write_csv(branch_share, "data/DRYBIO_BRANCH_compare.csv")
+```
+
+```{r}
 checks("foliage_match")
 ```
 
@@ -257,6 +274,19 @@ match_check %>%
   filter(merch_wood_match == 0,
          !plot %in% plot_exclude) %>%
   select(division, plot, species, dbh_cm, ht1_m, ht2_m, merch_wood_kg, merch_wood_fia)
+```
+
+```{r}
+merch_share <- match_check %>%
+  filter(merch_wood_match == 0) %>%
+  mutate(CR = crown_ratio*100,
+         DRYBIO_BOLE_fia_kg = merch_wood_fia,
+         DRYBIO_BOLE_bfa_kg = merch_wood_kg) %>%
+  select(STATECD, UNITCD, COUNTYCD, PLOT, INVYR, 
+         CN, TREE, STATUSCD, DECAYCD, SPCD, DIA, HT, ACTUALHT, CR,
+         division, province, DRYBIO_BOLE_bfa_kg, DRYBIO_BOLE_fia_kg)
+
+#write_csv(merch_share, "data/DRYBIO_BOLE_compare.csv")
 ```
 
 ```{r}
