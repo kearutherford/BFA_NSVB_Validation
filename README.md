@@ -35,7 +35,7 @@ components for each tree. We ran the 2021 subset of trees through the
 `BiomassNSVB()` function in BerkeleyForestsAnalytics. For each tree and
 biomass component, we verified that the FIA NSVB estimate and the BFA
 NSVB estimate were consistent to within 10 g (0.01 kg). For foliage
-biomass, whose values are generally much smaller, we sued a tighter
+biomass, whose values are generally much smaller, we used a tighter
 tolerance of 1 g (0.001 kg). Because of computer precision limits and
 minor rounding differences, obtaining exact numerical agreement is not
 practical. The specified tolerances reflect an appropriate and
@@ -63,6 +63,25 @@ publicly released plot locations). We found that almost all non-matching
 trees are concentrated within a small subset of plots, supporting that
 the fuzzing and swapping of plot locations is the primary source of
 discrepancy, as expected.
+
+We used the results from California as a case study to conduct a deeper
+investigation into discrepancies not likely attributable to plot fuzzing
+and swapping. For this analysis, we identified two additional (albeit
+rare) sources of discrepancy:
+
+1)  For branch and foliage biomass, there are a few cases where the FIA
+    estimate is 0 while the BFA estimate is a small, non-zero value. In
+    all of these cases ht2 (actual/measured tree height) is much less
+    than ht1 (estimated height of the tree with its top), yet the crown
+    ratio is nonzero. Based on the NSVB workflow, a small amount of
+    branch and foliage biomass would be expected in these instances.
+
+2)  For merchantable biomass variables (merch_wood and merch_bark),
+    there are a few cases where the FIA and BFA estimates differ
+    slightly for trees with unusual height-to-DBH dimensions. This is
+    likely due to the fact that the equation used to compute height to a
+    4-inch top diameter (which is not in closed form) does not always
+    solve reliably for tree with extreme dimensions.
 
 ### Description of files in repository
 
