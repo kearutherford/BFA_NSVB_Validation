@@ -261,6 +261,31 @@ match_summary <- match_check %>%
             stump_bark = (sum(stump_bark_match, na.rm=TRUE)/sum(!is.na(stump_bark_match)))*100)
 
 match_summary
-write_csv(match_summary, "data/match_results.csv")
+#write_csv(match_summary, "data/match_results.csv")
+```
+
+
+
+```{r}
+match_check %>%
+    mutate(match = case_when(total_wood_match > 0.5 ~ "no_error_n",
+                             total_wood_match < 0.5 ~ "error_n")) %>%
+    group_by(division, species, match) %>%
+    count() %>%
+    ungroup() %>%
+    pivot_wider(names_from = match, values_from = n, values_fill = 0) %>%
+    mutate(total_n = error_n + no_error_n,
+           percent_w_error = (error_n/total_n)*100) %>%
+    filter(percent_w_error > 20)
+```
+
+```{r}
+match_check %>%
+    mutate(match = case_when(total_wood_match > 0.5 ~ "no_error_n",
+                             total_wood_match < 0.5 ~ "error_n")) %>%
+    filter(species == 222,
+           division == "230",
+           match == "error_n") %>%
+    select(plot, dbh_cm, ht1_m, ht2_m, total_wood_kg, total_wood_fia, total_wood_match)
 ```
 

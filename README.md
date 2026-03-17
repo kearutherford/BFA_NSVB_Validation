@@ -23,12 +23,12 @@ estimating tree biomass with FIA’s implementation of NSVB.
 
 ### General workflow
 
-The annual FIA inventory samples approximately 10% of the FIA plots in
-each state. The 10% of plots are intentionally spread out across the
-state. We pulled FIA data for the continental US states for inventory
-year 2021 (2021 was the most recent year where data were available for
-every state), representing roughly 10% of FIA trees, spread fairly
-evenly across the country.
+The annual FIA inventory samples ~10-20% of the FIA plots in each state.
+The ~10-20% of plots are intentionally spread out across the state. We
+pulled FIA data for the continental US states for inventory year 2021
+(2021 was the most recent year where data were available for every
+state), representing ~10-20% of FIA trees, spread fairly evenly across
+the country.
 
 FIA internally applies the NSVB framework to estimate various biomass
 components for each tree. We ran the 2021 subset of trees through the
